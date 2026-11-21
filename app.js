@@ -23,8 +23,8 @@
   let running = false;
   let frame = 0;
   let lastFrame = 0;
-  let heading = Cesium.Math.toRadians(85);
-  let pitch = Cesium.Math.toRadians(-5);
+  let heading = 85 * Math.PI / 180;
+  let pitch = -5 * Math.PI / 180;
   let current = { ...START };
   const pressed = new Set();
 
@@ -106,8 +106,8 @@
       forward /= length;
       sideways /= length;
       const speed = pressed.has("ShiftLeft") || pressed.has("ShiftRight") ? FAST_METERS_PER_SECOND : WALK_METERS_PER_SECOND;
-      const north = (Math.cos(heading) * forward + Math.sin(heading) * sideways) * speed * delta;
-      const east = (Math.sin(heading) * forward - Math.cos(heading) * sideways) * speed * delta;
+      const north = (Math.cos(heading) * forward - Math.sin(heading) * sideways) * speed * delta;
+      const east = (Math.sin(heading) * forward + Math.cos(heading) * sideways) * speed * delta;
       const old = { ...current };
       current.latitude += north / 111320;
       current.longitude += east / (111320 * Math.cos(Cesium.Math.toRadians(current.latitude)));
