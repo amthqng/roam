@@ -1,39 +1,43 @@
 # Roam
 
-A peaceful, browser-based first-person exploration prototype. First destination: **Venice, Italy**, near Piazza San Marco.
+A quiet first-person walking game, starting with a **stylized Venice-inspired scene** near Piazza San Marco.
 
-## Prototype status
+**Play:** https://amthqng.github.io/roam/
 
-This is an early geographic viewer with game-style walking controls, **not** a collision-aware or street-accurate walking simulation. You can walk in any direction at a fixed approximate eye height. Buildings, bridges, water, and stairs currently have no gameplay collision or pathfinding. Photogrammetry may look rough close up.
+## What's included
 
-## Getting started (no local development required)
+- Procedurally generated Piazza San Marco-inspired square, basilica silhouette, bell tower, arcades, side street, canal, and bridge
+- First-person mouse look and WASD/arrow-key movement, with Shift to walk faster
+- Simple walkable-zone and building collision boundaries to keep you out of canals and buildings
+- Reset-position control, location HUD, and an information panel
+- No account, API key, or Google Map Tiles usage fees
 
-1. In [Google Cloud Console](https://console.cloud.google.com/), create or choose a project with billing enabled.
-2. Enable **Map Tiles API** and create a browser API key. Google Photorealistic 3D Tiles are usage-billed; review the [pricing and quotas](https://developers.google.com/maps/documentation/tile/usage-and-billing), and set a quota/budget alert.
-3. Restrict the key to **Map Tiles API** and to the website origin(s) you'll use, such as `https://amthqng.github.io/*` for GitHub Pages. For a custom domain, add that domain separately.
-4. Publish this static repository through **GitHub Pages** (Settings → Pages → Deploy from branch → `main` → `/ (root)`) or Cloudflare Pages (no build command; output directory `/`).
-5. Open the site in a desktop browser. Paste your key into the on-screen setup field and choose **Explore Venice**.
+## Setup
 
-The key is kept only in your browser's **session storage** so it is not committed to GitHub. Browser keys are exposed to the browser and network requests: use API and referrer restrictions, plus quotas. If a browser extension or privacy setting blocks tiles, try another desktop browser.
+There is no build step or local setup required. This is a static site with `index.html`, `styles.css`, and `app.js`.
 
-For local testing, serve the folder with any simple static server (for example `python3 -m http.server 8000`). Opening `index.html` as a `file://` URL is not supported.
+GitHub Pages runs through `.github/workflows/deploy.yml` on updates to `main`. To activate, set **Settings → Pages → Source: GitHub Actions**.
+
+For local development, use a static HTTP server such as `python3 -m http.server 8000` and visit http://localhost:8000. Do not open the HTML via `file://`, because ES modules are blocked by many browsers there.
+
+Three.js is loaded from the jsDelivr public CDN. There are no paid map data requests, but the initial page does require an internet connection to load the Three.js module. To make this offline-capable, vendor the dependency locally in a future revision.
 
 ## Controls
 
-- Click the scene to capture the mouse; move mouse to look around.
-- `W A S D` or arrow keys to walk; hold `Shift` to move faster.
-- `Esc` releases the mouse.
-- **Reset position** returns to the starting location.
-- **Change key** allows swapping your Google Map Tiles API key.
+- Click **Begin exploring**, then move mouse to look around.
+- **WASD** or **arrow keys**: walk
+- **Shift**: move faster
+- **Esc**: release mouse
+- **Reset position**: return to the square
 
-## Implementation
+## Design and limitations
 
-Static HTML, CSS, JavaScript, and [CesiumJS](https://cesium.com/platform/cesiumjs/). The map is streamed from the Google Maps Photorealistic 3D Tiles service using your browser API key. The Cesium/Google attribution is displayed by the viewer.
+This is an **artistic interpretation** of the Venice environment, not an exact geographic map or photogrammetry. The visual landmarks are simplified architectural silhouettes. Walking uses a fixed eye height and rough rectangular collision areas. Pedestrians, detailed canal navigation, weather, realistic bridges/stairs, and sound are planned but not yet implemented.
 
-## Next steps
+There is no user analytics or persistence, and no embedded secrets. No Google Maps API key is required. If you previously used a Google Map Tiles API key with an older Roam version, disable it or set its quota to zero in your Google Cloud project if you no longer need it.
 
-Evaluate Venice's street-level visual quality, replace fixed-altitude movement with manually validated pedestrian routes or surface-aware navigation, add collision/bridge handling, optimize loading, and add subtle environmental audio.
+## Technology
 
-## Data / licensing
-
-Google Maps Platform terms and attribution requirements apply. Do not download or cache the geographic tiles into an offline game. This repo contains no Google API keys.
+- [Three.js](https://threejs.org/) (MIT License)
+- Plain HTML, CSS, JavaScript ES modules
+- GitHub Pages deployment
