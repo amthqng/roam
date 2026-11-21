@@ -1,8 +1,10 @@
 (() => {
   "use strict";
 
-  const START = Object.freeze({ longitude: 12.3383, latitude: 45.43418, altitude: 5.0 });
+  const START = Object.freeze({ longitude: 12.3383, latitude: 45.43418, altitude: 110.0 });
   const RADIUS_METERS = 240;
+  const EYE_HEIGHT_METERS = 1.8;
+  let streetHeight = null;
   const WALK_METERS_PER_SECOND = 1.45;
   const FAST_METERS_PER_SECOND = 3.0;
   const EYE_LIMIT = Math.PI * 0.46;
@@ -79,13 +81,40 @@
     });
   }
 
-  function reset() {
+  async function reset() {
     current = { ...START };
     heading = Cesium.Math.toRadians(85);
     pitch = Cesium.Math.toRadians(-5);
     pressed.clear();
     updateCamera();
-    movementState.textContent = "Returned to Piazza San Marco";
+    await placeAtStreetHeight();
+    movementState.textContent = streetHeight === null ? "Street surface not detected. Camera stays above the city." : "Returned to Piazza San Marco";
+  }
+
+  async function placeAtStreetHeight() {
+    // Start above the 3D mesh, then query the actual photo-mesh height.
+    // Geographic coordinates alone do not tell us the rendered street altitude.
+    if (!viewer?.scene?.sampleHeightSupported) {
+      movementState.textContent = "Your browser cannot detect 3D street elevation.";
+      return false;
+    }
+    try {
+      const point = Cesium.Cartographic.fromDegrees(current.longitude, current.latitude);
+      const result = await viewer.scene.sampleHeightMostDetailed([point]);
+      const ground = result?.[0]?.height;
+      if (!Number.isFinite(ground)) {
+        streetHeight = null;
+        return false;
+      }
+      streetHeight = ground;
+      current.altitude = ground + EYE_HEIGHT_METERS;
+      updateCamera();
+      return true;
+    } catch (error) {
+      console.warn("Could not sample 3D street surface", error?.message);
+      streetHeight = null;
+      return false;
+    }
   }
 
   function distanceFromStart() {
@@ -116,6 +145,18 @@
         movementState.textContent = "Prototype boundary reached. Turn around or reset.";
       } else {
         movementState.textContent = "Walking near Piazza San Marco";
+      }
+      if (streetHeight !== null && viewer.scene.sampleHeightSupported) {
+        const point = Cesium.Cartographic.fromDegrees(current.longitude, current.latitude);
+        const measured = viewer.scene.sampleHeight(point);
+        if (Number.isFinite(measured)) {
+          // Follow a detected surface, but avoid sudden jumps onto rooftops
+          // or dives below the city if the photographic mesh has gaps.
+          if (Math.abs(measured - streetHeight) < 2.5) {
+            streetHeight = measured;
+          }
+          current.altitude = streetHeight + EYE_HEIGHT_METERS;
+        }
       }
       updateCamera();
     }
@@ -202,7 +243,17 @@
         maximumScreenSpaceError: 12
       });
       viewer.scene.primitives.add(tileset);
+      // A temporary elevated camera lets Cesium request the destination tiles.
+      // Do not enter first-person mode until the scene surface is resolved.
+      current = { ...START };
+      streetHeight = null;
       updateCamera();
+      setupMessage.textContent = "Finding a safe street-level starting height…";
+      const placed = await placeAtStreetHeight();
+      if (!placed) {
+        throw new Error("Could not detect the street surface in Venice. Try again after tiles load, or use a browser with WebGL depth textures.");
+      }
+      setupMessage.textContent = "";
       startWalking();
     } catch (error) {
       const message = safeError(error, key);
