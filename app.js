@@ -133,6 +133,42 @@
     movementState.textContent = "Click the scene to capture your mouse";
   }
 
+  function friendlyStatus(status, details) {
+    const msg = String(details || "").slice(0, 350);
+    if (status === 400) return "Google rejected this Map Tiles request (400). " + msg;
+    if (status === 401) return "Google did not accept the API key (401). Check that it was copied correctly.";
+    if (status === 403) return "Google denied access (403). Check Map Tiles API is enabled, billing is active, and the key's website/API restrictions allow this site. " + msg;
+    if (status === 404) return "Google could not find the 3D tiles resource (404). Check that Photorealistic 3D Tiles are available for this project.";
+    if (status === 429) return "Google's Map Tiles API quota was exceeded (429). Review your quota and billing.";
+    return "Map Tiles API returned HTTP " + status + ". " + msg;
+  }
+
+  async function checkTilesAccess(key) {
+    const url = new URL("https://tile.googleapis.com/v1/3dtiles/root.json");
+    url.searchParams.set("key", key);
+    let response;
+    try {
+      response = await fetch(url.toString(), { cache: "no-store" });
+    } catch (_) {
+      throw new Error("Could not connect to Google's tile server. Check browser network settings, content blockers, or your internet connection.");
+    }
+    if (!response.ok) {
+      let detail = "";
+      try {
+        const payload = await response.json();
+        detail = payload?.error?.message || payload?.message || "";
+      } catch (_) {}
+      throw new Error(friendlyStatus(response.status, detail));
+    }
+    return true;
+  }
+
+  function safeError(error, key) {
+    // Never show or log an API key embedded in a failed network request URL.
+    const value = error instanceof Error ? error.message : String(error);
+    return value.replaceAll(key, "[redacted]").replace(/key=([^&\\s]+)/gi, "key=[redacted]");
+  }
+
   async function start() {
     const key = input.value.trim();
     if (!key) {
@@ -150,6 +186,9 @@
     loading.classList.remove("hidden");
     try {
       try { sessionStorage.setItem(KEY_STORAGE, key); } catch (_) {}
+      setupMessage.textContent = "Checking Google Map Tiles API access…";
+      await checkTilesAccess(key);
+      setupMessage.textContent = "Connecting the 3D viewer…";
       installViewer();
       if (tileset) {
         viewer.scene.primitives.remove(tileset);
@@ -166,9 +205,10 @@
       updateCamera();
       startWalking();
     } catch (error) {
-      console.error("Could not load Venice tiles", error);
-      setupMessage.textContent = "Unable to load 3D tiles. Check Map Tiles API access, billing, key website restrictions, and quotas. See browser console for details.";
-      showError("3D map unavailable. Check your Google API key configuration.");
+      const message = safeError(error, key);
+      console.error("Roam map loading failed:", message);
+      setupMessage.textContent = message;
+      showError("Venice could not load: " + message);
     } finally {
       loading.classList.add("hidden");
       button.disabled = false;
