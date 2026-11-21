@@ -1,56 +1,27 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#101b22">
-  <meta name="description" content="Roam: explore beautiful places at your own pace.">
-  <title>Roam | Venice</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.134.1/Build/Cesium/Widgets/widgets.css">
-  <link rel="stylesheet" href="./styles.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/cesium@1.134.1/Build/Cesium/Cesium.js"></script>
-  <script defer src="./app.js"></script>
-</head>
-<body>
-  <main id="app">
-    <div id="cesiumContainer" aria-label="Interactive 3D view of Venice"></div>
-    <div class="vignette" aria-hidden="true"></div>
-
-    <header class="topbar">
-      <div class="brand">ROAM<span class="brand-dot">.</span></div>
-      <div class="place"><span class="place-dot"></span> VENICE, ITALY <span class="place-divider">/</span> PIAZZA SAN MARCO</div>
-      <button type="button" class="top-action" id="changeKey">Map settings</button>
-    </header>
-
-    <section class="welcome panel" id="setup" aria-labelledby="welcomeTitle">
-      <p class="eyebrow">YOUR FIRST DESTINATION</p>
-      <h1 id="welcomeTitle">Get lost<br>in Venice.</h1>
-      <p class="intro">The city is yours to explore. No missions. No rush. Just wander.</p>
-      <label for="apiKey">Google Map Tiles API key</label>
-      <input id="apiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste your restricted browser API key">
-      <p class="helper">A key with Map Tiles API access and billing enabled is needed to stream the real 3D city. It stays in this browser session.</p>
-      <button type="button" id="startButton" class="primary">Explore Venice <span aria-hidden="true">↗</span></button>
-      <p class="message" role="status" id="setupMessage"></p>
-      <a href="https://github.com/amthqng/roam#Getting-started-no-local-development-required" target="_blank" rel="noopener noreferrer" class="help-link">How do I get an API key?</a>
-    </section>
-
-    <div id="loading" class="loading hidden" role="status" aria-live="polite">
-      <span class="spinner" aria-hidden="true"></span><span>Bringing Venice into view…</span>
-    </div>
-
-    <div class="hud hidden" id="hud">
-      <div class="crosshair" aria-hidden="true"></div>
-      <div class="bottom-left">
-        <div class="location-name">Piazza San Marco</div>
-        <div class="location-sub">VENICE · ITALY</div>
-      </div>
-      <div class="bottom-right">
-        <div class="controls"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>walk</span><span class="sep"></span><span>mouse to look</span><span class="sep"></span><kbd>Shift</kbd><span>faster</span><span class="sep"></span><kbd>Esc</kbd><span>cursor</span></div>
-        <div class="actions"><button type="button" id="resetButton">↺ Reset position</button><span id="movementState" aria-live="polite">Click anywhere on the world to look around</span></div>
-      </div>
-      <div class="prototype-note">EARLY PROTOTYPE · FIXED EYE HEIGHT · NO COLLISION</div>
-    </div>
-    <div id="fatalError" class="error-banner hidden" role="alert"></div>
-  </main>
-</body>
-</html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#142229"><meta name="description" content="Roam Venice: a quiet first-person walking experience.">
+<title>Roam | Venice</title><link rel="stylesheet" href="./styles.css">
+<script type="module" src="./app.js"></script>
+</head><body>
+<div id="scene" aria-label="3D walking scene"></div>
+<div class="shade" aria-hidden="true"></div>
+<header><div class="logo">ROAM<span>.</span></div><div class="place">● VENICE, ITALY <i>/</i> SAN MARCO</div><button id="about" class="text-button">About this place</button></header>
+<section id="intro" class="intro">
+  <div class="kicker">01 / DESTINATIONS</div>
+  <h1>A little time<br>in <em>Venice.</em></h1>
+  <p>Wander through a sunlit piazza, follow the narrow streets, and find your way to the water. No missions. No rush.</p>
+  <button id="begin" class="primary">Begin exploring <span>↗</span></button>
+  <small>Free to explore · No API key needed</small>
+</section>
+<div id="loading" class="loading" role="status">Building your little corner of Venice…</div>
+<div id="hud" class="hidden">
+  <div class="crosshair" aria-hidden="true"></div>
+  <div class="footnote"><div class="footnote-title" id="area">Piazza San Marco</div><div class="footnote-sub">VENICE · INSPIRED RECREATION</div></div>
+  <div class="guide"><div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Walk <span class="divider"></span> Move mouse to look <span class="divider"></span> <kbd>Shift</kbd> Faster <span class="divider"></span> <kbd>Esc</kbd> Release</div><div class="status" id="status">Click the world to capture the mouse</div></div>
+  <button class="reset" id="reset">↺ Reset position</button>
+</div>
+<div id="info" class="info hidden"><button id="closeInfo" class="close">✕</button><h2>Venice, reimagined.</h2><p>This is a small, stylized, handcrafted environment inspired by the Piazza San Marco area. It is not an exact street map or a model of the real city.</p><p>The buildings and walkable surfaces are generated in your browser using Three.js. No paid map streaming, no API key.</p><p>Explore the square and look for a bridge to the waterfront.</p></div>
+<div id="error" class="error hidden" role="alert"></div>
+</body></html>
