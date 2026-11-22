@@ -1,8 +1,16 @@
 (() => {
   "use strict";
 
-  const START = Object.freeze({ longitude: 12.3383, latitude: 45.43418, altitude: 110.0 });
-  const RADIUS_METERS = 240;
+  const DESTINATIONS = Object.freeze({
+    yosemite: {name:"Yosemite Valley", region:"CALIFORNIA, USA", landmark:"TUNNEL VIEW", longitude:-119.6790, latitude:37.7165, altitude:1740, heading:72, pitch:-8, radius:14000, mode:"fly"},
+    venice: {name:"Piazza San Marco", region:"VENICE, ITALY", landmark:"PIAZZA SAN MARCO", longitude:12.3383, latitude:45.43418, altitude:110, heading:85, pitch:-5, radius:240, mode:"walk"}
+  });
+  let destination = "yosemite";
+  let START = DESTINATIONS[destination];
+  let mode = START.mode;
+  let relocating = false;
+  let flightSpeed = 35;
+  let lastHeightCheck = 0;
   const EYE_HEIGHT_METERS = 1.8;
   let streetHeight = null;
   const WALK_METERS_PER_SECOND = 1.45;
@@ -29,8 +37,8 @@
   let running = false;
   let frame = 0;
   let lastFrame = 0;
-  let heading = 85 * Math.PI / 180;
-  let pitch = -5 * Math.PI / 180;
+  let heading = START.heading * Math.PI / 180;
+  let pitch = START.pitch * Math.PI / 180;
   let current = { ...START };
   const pressed = new Set();
 
@@ -103,14 +111,38 @@
     });
   }
 
+  function updateLabels() {
+    $("destinationPicker").value = destination;
+    $("modePicker").value = mode;
+    $("placeLabel").textContent = START.region + " / " + START.landmark;
+    $("locationName").textContent = START.name;
+    $("locationSub").textContent = START.region + " · " + (mode === "fly" ? "SCENIC FLIGHT" : "WALK");
+    $("movementLabel").textContent = mode === "fly" ? "fly" : "walk";
+    $("flightControls").classList.toggle("hidden", mode !== "fly");
+    $("modeNote").textContent = mode === "fly" ? "FREE FLIGHT · TERRAIN CLEARANCE APPROXIMATE" : "EARLY PROTOTYPE · NO BUILDING COLLISION";
+    $("welcomeTitle").textContent = destination === "yosemite" ? "Above Yosemite." : "Get lost in Venice.";
+  }
   async function reset() {
-    current = { ...START };
-    heading = Cesium.Math.toRadians(85);
-    pitch = Cesium.Math.toRadians(-5);
-    pressed.clear();
-    updateCamera();
-    await placeAtStreetHeight();
-    movementState.textContent = streetHeight === null ? "Street surface not detected. Camera stays above the city." : "Returned to Piazza San Marco";
+    if (relocating) return;
+    relocating = true;
+    try {
+      pressed.clear();
+      streetHeight = null;
+      current = { ...START };
+      heading = Cesium.Math.toRadians(START.heading);
+      pitch = Cesium.Math.toRadians(START.pitch);
+      updateCamera();
+      if (mode === "walk") {
+        const placed = await placeAtStreetHeight();
+        if (!placed) {
+          mode = "fly";
+          movementState.textContent = "Surface not detected. Switched to flight.";
+          updateLabels();
+          return;
+        }
+      }
+      movementState.textContent = "Returned to " + START.name;
+    } finally { relocating = false; }
   }
 
   async function placeAtStreetHeight() {
@@ -153,22 +185,34 @@
     let forward = Number(pressed.has("KeyW") || pressed.has("ArrowUp")) - Number(pressed.has("KeyS") || pressed.has("ArrowDown"));
     let sideways = Number(pressed.has("KeyD") || pressed.has("ArrowRight")) - Number(pressed.has("KeyA") || pressed.has("ArrowLeft"));
     const length = Math.hypot(forward, sideways);
-    if (length > 0) {
-      forward /= length;
-      sideways /= length;
-      const speed = pressed.has("ShiftLeft") || pressed.has("ShiftRight") ? FAST_METERS_PER_SECOND : WALK_METERS_PER_SECOND;
+    const vertical = mode === "fly" ? Number(pressed.has("KeyE") || pressed.has("Space")) - Number(pressed.has("KeyQ") || pressed.has("KeyC")) : 0;
+    if (relocating) { frame = requestAnimationFrame(loop); return; }
+    if (length > 0 || vertical !== 0) {
+      forward /= Math.max(1,length);
+      sideways /= Math.max(1,length);
+      const fast = pressed.has("ShiftLeft") || pressed.has("ShiftRight");
+      const speed = mode === "fly" ? flightSpeed * (fast ? 4 : 1) : fast ? FAST_METERS_PER_SECOND : WALK_METERS_PER_SECOND;
       const north = (Math.cos(heading) * forward - Math.sin(heading) * sideways) * speed * delta;
       const east = (Math.sin(heading) * forward + Math.cos(heading) * sideways) * speed * delta;
       const old = { ...current };
       current.latitude += north / 111320;
       current.longitude += east / (111320 * Math.cos(Cesium.Math.toRadians(current.latitude)));
-      if (distanceFromStart() > RADIUS_METERS) {
+      if (distanceFromStart() > START.radius) {
         current = old;
         movementState.textContent = "Prototype boundary reached. Turn around or reset.";
       } else {
-        movementState.textContent = "Walking near Piazza San Marco";
+        movementState.textContent = mode === "fly" ? "Scenic flight · " + Math.round(current.altitude) + " m ellipsoid height" : "Exploring " + START.name;
       }
-      if (streetHeight !== null && viewer.scene.sampleHeightSupported) {
+      if (mode === "fly") {
+        current.altitude = Math.min(6500,Math.max(START.altitude - 700,current.altitude + vertical * speed * .65 * delta));
+        if (viewer.scene.sampleHeightSupported && timestamp-lastHeightCheck>250) {
+          lastHeightCheck=timestamp;
+          try {
+            const measured=viewer.scene.sampleHeight(Cesium.Cartographic.fromDegrees(current.longitude,current.latitude));
+            if(Number.isFinite(measured)) current.altitude=Math.max(measured+12,current.altitude);
+          } catch (_) {}
+        }
+      } else if (streetHeight !== null && viewer.scene.sampleHeightSupported) {
         const point = Cesium.Cartographic.fromDegrees(current.longitude, current.latitude);
         const measured = viewer.scene.sampleHeight(point);
         if (Number.isFinite(measured)) {
@@ -217,7 +261,7 @@
     if (loadingSession || running) return;
     const key = input.value.trim();
     if (!key) {
-      setupMessage.textContent = "Enter a Google Map Tiles API key to load Venice.";
+      setupMessage.textContent = "Enter a Google Map Tiles API key to explore.";
       input.focus();
       return;
     }
@@ -255,23 +299,14 @@
         activeKey = key;
       }
       applyQuality();
-      // A temporary elevated camera lets Cesium request the destination tiles.
-      // Do not enter first-person mode until the scene surface is resolved.
-      current = { ...START };
-      streetHeight = null;
-      updateCamera();
-      setupMessage.textContent = "Finding a safe street-level starting height…";
-      const placed = await placeAtStreetHeight();
-      if (!placed) {
-        throw new Error("Could not detect the street surface in Venice. Try again after tiles load, or use a browser with WebGL depth textures.");
-      }
+      await reset();
       setupMessage.textContent = "";
       startWalking();
     } catch (error) {
       const message = safeError(error, key);
       console.error("Roam map loading failed:", message);
       setupMessage.textContent = message;
-      showError("Venice could not load: " + message);
+      showError("Destination could not load: " + message);
     } finally {
       loading.classList.add("hidden");
       button.disabled = false;
@@ -290,6 +325,21 @@
       pressed.clear();
     });
   }
+  updateLabels();
+  $("destinationPicker").addEventListener("change", async (event) => {
+    if (loadingSession || relocating) { updateLabels(); return; }
+    destination = event.target.value;
+    START = DESTINATIONS[destination];
+    mode = START.mode;
+    updateLabels();
+    if (running) await reset();
+  });
+  $("modePicker").addEventListener("change", async (event) => {
+    if (loadingSession || relocating) { updateLabels(); return; }
+    mode = event.target.value;
+    updateLabels();
+    if (running) await reset();
+  });
   button.addEventListener("click", start);
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") start();
@@ -308,7 +358,7 @@
 
   document.addEventListener("keydown", (event) => {
     if (!running || event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
-    if (["KeyW","KeyA","KeyS","KeyD","ShiftLeft","ShiftRight","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.code)) {
+    if (["KeyW","KeyA","KeyS","KeyD","ShiftLeft","ShiftRight","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","KeyQ","KeyE","KeyC","Space"].includes(event.code)) {
       pressed.add(event.code);
       event.preventDefault();
     }
@@ -317,7 +367,7 @@
   window.addEventListener("blur", () => pressed.clear());
   document.addEventListener("pointerlockchange", () => {
     if (!running) return;
-    movementState.textContent = document.pointerLockElement ? "Use WASD to walk · Esc to release mouse" : "Click the scene to look around";
+    movementState.textContent = document.pointerLockElement ? (mode === "fly" ? "WASD to fly · Q/E descend/climb · Esc to release" : "Use WASD to walk · Esc to release mouse") : "Click the scene to look around";
   });
   document.addEventListener("mousemove", (event) => {
     if (!running || !viewer || document.pointerLockElement !== viewer.scene.canvas) return;
