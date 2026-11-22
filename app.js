@@ -2,7 +2,7 @@
   "use strict";
 
   const DESTINATIONS = Object.freeze({
-    yosemite: {name:"Yosemite Valley", region:"CALIFORNIA, USA", landmark:"TUNNEL VIEW", longitude:-119.6790, latitude:37.7165, altitude:1740, heading:72, pitch:-8, radius:14000, mode:"fly"},
+    yosemite: {name:"Yosemite Valley", region:"CALIFORNIA, USA", landmark:"TUNNEL VIEW", longitude:-119.6790, latitude:37.7165, altitude:3600, heading:72, pitch:-25, radius:14000, mode:"fly"},
     venice: {name:"Piazza San Marco", region:"VENICE, ITALY", landmark:"PIAZZA SAN MARCO", longitude:12.3383, latitude:45.43418, altitude:110, heading:85, pitch:-5, radius:240, mode:"walk"}
   });
   let destination = "yosemite";
@@ -11,6 +11,7 @@
   let relocating = false;
   let flightSpeed = 35;
   let lastHeightCheck = 0;
+  let groundEstimate = null;
   const EYE_HEIGHT_METERS = 1.8;
   let streetHeight = null;
   const WALK_METERS_PER_SECOND = 1.45;
@@ -128,6 +129,7 @@
     try {
       pressed.clear();
       streetHeight = null;
+      groundEstimate = null;
       current = { ...START };
       heading = Cesium.Math.toRadians(START.heading);
       pitch = Cesium.Math.toRadians(START.pitch);
@@ -140,6 +142,12 @@
           updateLabels();
           return;
         }
+      }
+      if (mode === "fly") {
+        // Start from a conservative aerial viewpoint; do not require a height
+        // sample before allowing the high-altitude tiles to become visible.
+        current.altitude = Math.max(current.altitude, destination === "yosemite" ? 3600 : 180);
+        updateCamera();
       }
       movementState.textContent = "Returned to " + START.name;
     } finally { relocating = false; }
@@ -187,6 +195,14 @@
     const length = Math.hypot(forward, sideways);
     const vertical = mode === "fly" ? Number(pressed.has("KeyE") || pressed.has("Space")) - Number(pressed.has("KeyQ") || pressed.has("KeyC")) : 0;
     if (relocating) { frame = requestAnimationFrame(loop); return; }
+    if (mode === "fly" && viewer.scene.sampleHeightSupported && timestamp-lastHeightCheck>250) {
+      lastHeightCheck=timestamp;
+      try { const h=viewer.scene.sampleHeight(Cesium.Cartographic.fromDegrees(current.longitude,current.latitude)); if(Number.isFinite(h)) groundEstimate=h; } catch (_) {}
+    }
+    if (mode === "fly" && vertical < 0 && groundEstimate === null && destination === "yosemite" && current.altitude < 2700) {
+      movementState.textContent = "Waiting for terrain elevation; descend after the mesh loads.";
+      frame = requestAnimationFrame(loop); return;
+    }
     if (length > 0 || vertical !== 0) {
       forward /= Math.max(1,length);
       sideways /= Math.max(1,length);
@@ -204,14 +220,8 @@
         movementState.textContent = mode === "fly" ? "Scenic flight · " + Math.round(current.altitude) + " m ellipsoid height" : "Exploring " + START.name;
       }
       if (mode === "fly") {
-        current.altitude = Math.min(6500,Math.max(START.altitude - 700,current.altitude + vertical * speed * .65 * delta));
-        if (viewer.scene.sampleHeightSupported && timestamp-lastHeightCheck>250) {
-          lastHeightCheck=timestamp;
-          try {
-            const measured=viewer.scene.sampleHeight(Cesium.Cartographic.fromDegrees(current.longitude,current.latitude));
-            if(Number.isFinite(measured)) current.altitude=Math.max(measured+12,current.altitude);
-          } catch (_) {}
-        }
+        current.altitude = Math.min(6500,Math.max((destination === "yosemite" ? 1250 : 0),current.altitude + vertical * speed * .65 * delta));
+        if (Number.isFinite(groundEstimate)) current.altitude = Math.max(groundEstimate + 35,current.altitude);
       } else if (streetHeight !== null && viewer.scene.sampleHeightSupported) {
         const point = Cesium.Cartographic.fromDegrees(current.longitude, current.latitude);
         const measured = viewer.scene.sampleHeight(point);
