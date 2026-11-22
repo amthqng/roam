@@ -7,9 +7,9 @@
   <meta name="description" content="Roam: explore beautiful places at your own pace.">
   <title>Roam | Venice</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.134.1/Build/Cesium/Widgets/widgets.css">
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=quality1">
   <script defer src="https://cdn.jsdelivr.net/npm/cesium@1.134.1/Build/Cesium/Cesium.js"></script>
-  <script defer src="./app.js"></script>
+  <script defer src="./app.js?v=quality1"></script>
 </head>
 <body>
   <main id="app">
@@ -19,6 +19,7 @@
     <header class="topbar">
       <div class="brand">ROAM<span class="brand-dot">.</span></div>
       <div class="place"><span class="place-dot"></span> VENICE, ITALY <span class="place-divider">/</span> PIAZZA SAN MARCO</div>
+      <label class="quality-control">Graphics <select id="graphicsQuality" aria-label="Graphics quality"><option value="standard">Standard</option><option value="high">High</option><option value="ultra" selected>Ultra</option></select></label>
       <button type="button" class="top-action" id="changeKey">Map settings</button>
     </header>
 
