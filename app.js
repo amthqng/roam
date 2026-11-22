@@ -22,6 +22,8 @@
 
   let viewer = null;
   let tileset = null;
+  let activeKey = null;
+  let loadingSession = false;
   let running = false;
   let frame = 0;
   let lastFrame = 0;
@@ -184,33 +186,15 @@
     return "Map Tiles API returned HTTP " + status + ". " + msg;
   }
 
-  async function checkTilesAccess(key) {
-    const url = new URL("https://tile.googleapis.com/v1/3dtiles/root.json");
-    url.searchParams.set("key", key);
-    let response;
-    try {
-      response = await fetch(url.toString(), { cache: "no-store" });
-    } catch (_) {
-      throw new Error("Could not connect to Google's tile server. Check browser network settings, content blockers, or your internet connection.");
-    }
-    if (!response.ok) {
-      let detail = "";
-      try {
-        const payload = await response.json();
-        detail = payload?.error?.message || payload?.message || "";
-      } catch (_) {}
-      throw new Error(friendlyStatus(response.status, detail));
-    }
-    return true;
-  }
-
   function safeError(error, key) {
     // Never show or log an API key embedded in a failed network request URL.
-    const value = error instanceof Error ? error.message : String(error);
+    const status = Number(error?.statusCode || error?.status);
+    const value = Number.isFinite(status) && status > 0 ? friendlyStatus(status, "") : (error?.message || String(error));
     return value.replaceAll(key, "[redacted]").replace(/key=([^&\\s]+)/gi, "key=[redacted]");
   }
 
   async function start() {
+    if (loadingSession || running) return;
     const key = input.value.trim();
     if (!key) {
       setupMessage.textContent = "Enter a Google Map Tiles API key to load Venice.";
@@ -223,26 +207,33 @@
     }
     clearError();
     setupMessage.textContent = "";
+    loadingSession = true;
     button.disabled = true;
     loading.classList.remove("hidden");
     try {
       try { sessionStorage.setItem(KEY_STORAGE, key); } catch (_) {}
-      setupMessage.textContent = "Checking Google Map Tiles API access…";
-      await checkTilesAccess(key);
       setupMessage.textContent = "Connecting the 3D viewer…";
       installViewer();
-      if (tileset) {
+      // One root request per new tileset. Reuse the loaded tileset for the
+      // same API key, including after opening settings or retrying elevation.
+      if (tileset && activeKey !== key) {
         viewer.scene.primitives.remove(tileset);
         tileset = null;
+        activeKey = null;
       }
-      const resource = new Cesium.Resource({
-        url: "https://tile.googleapis.com/v1/3dtiles/root.json",
-        queryParameters: { key }
-      });
-      tileset = await Cesium.Cesium3DTileset.fromUrl(resource, {
-        maximumScreenSpaceError: 12
-      });
-      viewer.scene.primitives.add(tileset);
+      if (!tileset) {
+        const resource = new Cesium.Resource({
+          url: "https://tile.googleapis.com/v1/3dtiles/root.json",
+          queryParameters: { key }
+        });
+        const next = await Cesium.Cesium3DTileset.fromUrl(resource, {
+          maximumScreenSpaceError: 12,
+          showCreditsOnScreen: true
+        });
+        viewer.scene.primitives.add(next);
+        tileset = next;
+        activeKey = key;
+      }
       // A temporary elevated camera lets Cesium request the destination tiles.
       // Do not enter first-person mode until the scene surface is resolved.
       current = { ...START };
@@ -263,6 +254,7 @@
     } finally {
       loading.classList.add("hidden");
       button.disabled = false;
+      loadingSession = false;
     }
   }
 
@@ -272,6 +264,7 @@
   });
   $("resetButton").addEventListener("click", reset);
   $("changeKey").addEventListener("click", () => {
+    if (loadingSession) return;
     if (document.pointerLockElement) document.exitPointerLock?.();
     cancelAnimationFrame(frame);
     running = false;
