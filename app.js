@@ -9,6 +9,8 @@
   const FAST_METERS_PER_SECOND = 3.0;
   const EYE_LIMIT = Math.PI * 0.46;
   const KEY_STORAGE = "roam.googleMapTilesApiKey";
+  const QUALITY = Object.freeze({standard:{sse:12,scale:.8,cache:256},high:{sse:4,scale:1,cache:512},ultra:{sse:1,scale:1,cache:1024}});
+  let quality = "ultra";
 
   const $ = (id) => document.getElementById(id);
   const setup = $("setup");
@@ -34,6 +36,23 @@
 
   try { input.value = sessionStorage.getItem(KEY_STORAGE) || ""; } catch (_) {}
 
+  try { const saved = localStorage.getItem("roam.graphicsQuality"); if (Object.hasOwn(QUALITY,saved)) quality = saved; } catch (_) {}
+  function applyQuality() {
+    const q = QUALITY[quality];
+    if (viewer) {
+      viewer.useBrowserRecommendedResolution = quality === "standard";
+      viewer.resolutionScale = q.scale;
+    }
+    if (tileset) {
+      tileset.maximumScreenSpaceError = q.sse;
+      tileset.cacheBytes = q.cache * 1024 * 1024;
+      tileset.maximumCacheOverflowBytes = q.cache * 1024 * 1024;
+      tileset.dynamicScreenSpaceError = quality === "standard";
+      tileset.foveatedScreenSpaceError = quality !== "ultra";
+    }
+    const picker = $("graphicsQuality");
+    if (picker) picker.value = quality;
+  }
   const showError = (message) => {
     fatalError.textContent = message;
     fatalError.classList.remove("hidden");
@@ -66,6 +85,7 @@
     viewer.scene.screenSpaceCameraController.enableInputs = false;
     viewer.scene.fog.enabled = false;
     viewer.scene.postProcessStages.fxaa.enabled = true;
+    applyQuality();
     viewer.camera.frustum.fov = Cesium.Math.toRadians(75);
     updateCamera();
     viewer.scene.canvas.addEventListener("click", () => {
@@ -227,13 +247,14 @@
           queryParameters: { key }
         });
         const next = await Cesium.Cesium3DTileset.fromUrl(resource, {
-          maximumScreenSpaceError: 12,
+          maximumScreenSpaceError: QUALITY[quality].sse,
           showCreditsOnScreen: true
         });
         viewer.scene.primitives.add(next);
         tileset = next;
         activeKey = key;
       }
+      applyQuality();
       // A temporary elevated camera lets Cesium request the destination tiles.
       // Do not enter first-person mode until the scene surface is resolved.
       current = { ...START };
@@ -258,6 +279,17 @@
     }
   }
 
+  const qualityPicker = $("graphicsQuality");
+  if (qualityPicker) {
+    qualityPicker.value = quality;
+    qualityPicker.addEventListener("change", () => {
+      if (!Object.hasOwn(QUALITY,qualityPicker.value)) return;
+      quality = qualityPicker.value;
+      try { localStorage.setItem("roam.graphicsQuality",quality); } catch (_) {}
+      applyQuality();
+      pressed.clear();
+    });
+  }
   button.addEventListener("click", start);
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") start();
@@ -275,7 +307,7 @@
   });
 
   document.addEventListener("keydown", (event) => {
-    if (!running || event.target instanceof HTMLInputElement) return;
+    if (!running || event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
     if (["KeyW","KeyA","KeyS","KeyD","ShiftLeft","ShiftRight","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.code)) {
       pressed.add(event.code);
       event.preventDefault();
